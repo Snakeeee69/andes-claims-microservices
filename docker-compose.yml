@@ -1,0 +1,38 @@
+services:
+  ms-usuarios:
+    build: ./ms-usuarios
+    container_name: andes-ms-usuarios
+    ports:
+      - "8089:8089"
+    environment:
+      - DB_HOST=host.docker.internal
+      - DB_PASSWORD=
+      - MS_AUTH_URI=http://ms-auth-usuarios:8081
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ms-auth-usuarios:
+    build: ./ms-auth-usuarios
+    container_name: andes-ms-auth
+    ports:
+      - "8081:8081"
+    environment:
+      - DB_HOST=host.docker.internal
+      - DB_PASSWORD=
+      - MS_USUARIOS_URI=http://ms-usuarios:8089
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - ms-usuarios
+
+  andes-gateway:
+    build: ./andes-gateway
+    container_name: andes-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - MS_AUTH_URI=http://ms-auth-usuarios:8081
+      - MS_USUARIOS_URI=http://ms-usuarios:8089
+    depends_on:
+      - ms-usuarios
+      - ms-auth-usuarios

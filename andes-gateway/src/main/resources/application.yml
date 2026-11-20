@@ -1,0 +1,69 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: andes-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "*"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders: "*"
+          routes:
+            - id: ms-auth-route
+              uri: ${MS_AUTH_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/auth/**
+
+            - id: ms-usuarios-route
+              uri: ${MS_USUARIOS_URI:http://localhost:8089}
+              predicates:
+                - Path=/api/usuarios/**
+                
+            - id: ms-catalogo-route
+              uri: ${MS_CATALOGO_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/areas/**,/api/requisitos/**
+
+            - id: ms-asignacion-route
+              uri: ${MS_ASIGNACION_URI:http://localhost:8084}
+              predicates:
+                - Path=/api/siniestros/*/asignar,/api/siniestros/*/prorroga,/api/asignaciones/**
+
+            - id: ms-liquidacion-route
+              uri: ${MS_LIQUIDACION_URI:http://localhost:8085}
+              predicates:
+                - Path=/api/siniestros/*/aceptar,/api/siniestros/*/rechazar,/api/siniestros/*/etapa,/api/siniestros/*/cerrar,/api/liquidacion/**
+
+            - id: ms-siniestros-route
+              uri: ${MS_SINIESTROS_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/siniestros/**
+
+            - id: ms-documentos-route
+              uri: ${MS_DOCUMENTOS_URI:http://localhost:8086}
+              predicates:
+                - Path=/api/evidencias/**,/api/documentos/**
+
+            - id: ms-historial-route
+              uri: ${MS_HISTORIAL_URI:http://localhost:8087}
+              predicates:
+                - Path=/api/historial/**
+
+            - id: ms-notificaciones-route
+              uri: ${MS_NOTIFICACIONES_URI:http://localhost:8088}
+              predicates:
+                - Path=/api/notificaciones/**
+
+jwt:
+  secret: AndesBpoClaveSecretaSuperSeguraParaFirmarTokensJWT2026Chile

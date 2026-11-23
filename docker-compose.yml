@@ -1,38 +1,79 @@
 services:
-  ms-usuarios:
-    build: ./ms-usuarios
-    container_name: andes-ms-usuarios
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
     ports:
-      - "8089:8089"
+      - "8761:8761"
     environment:
-      - DB_HOST=host.docker.internal
-      - DB_PASSWORD=
-      - MS_AUTH_URI=http://ms-auth-usuarios:8081
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  ms-auth-usuarios:
-    build: ./ms-auth-usuarios
-    container_name: andes-ms-auth
-    ports:
-      - "8081:8081"
-    environment:
-      - DB_HOST=host.docker.internal
-      - DB_PASSWORD=
-      - MS_USUARIOS_URI=http://ms-usuarios:8089
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - ms-usuarios
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: "false"
+    networks:
+      - andes-net
 
   andes-gateway:
     build: ./andes-gateway
     container_name: andes-gateway
     ports:
       - "8080:8080"
-    environment:
-      - MS_AUTH_URI=http://ms-auth-usuarios:8081
-      - MS_USUARIOS_URI=http://ms-usuarios:8089
     depends_on:
-      - ms-usuarios
-      - ms-auth-usuarios
+      - eureka-server
+    environment:
+      EUREKA_URI: http://eureka-server:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: "false"
+    networks:
+      - andes-net
+
+  ms-auth-usuarios:
+    build: ./ms-auth-usuarios
+    container_name: andes-ms-auth
+    ports:
+      - "8081:8081"
+    depends_on:
+      - eureka-server
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/andes_auth_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=America/Santiago&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: "false"
+    networks:
+      - andes-net
+
+  ms-usuarios:
+    build: ./ms-usuarios
+    container_name: andes-ms-usuarios
+    ports:
+      - "8082:8082"
+    depends_on:
+      - eureka-server
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/andes_usuarios_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=America/Santiago&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: "false"
+    networks:
+      - andes-net
+
+  ms-siniestros:
+    build: ./ms-siniestros
+    container_name: andes-ms-siniestros
+    ports:
+      - "8083:8083"
+    depends_on:
+      - eureka-server
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/andes_siniestros_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=America/Santiago&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: "false"
+    networks:
+      - andes-net
+
+networks:
+  andes-net:
+    driver: bridge

@@ -5,6 +5,8 @@ spring:
   application:
     name: andes-gateway
   cloud:
+    compatibility-verifier:
+      enabled: false
     gateway:
       server:
         webflux:
@@ -20,50 +22,32 @@ spring:
                   - OPTIONS
                 allowedHeaders: "*"
           routes:
+            # 1. Credenciales y Login (ms-auth-usuarios - Puerto 8081)
             - id: ms-auth-route
-              uri: ${MS_AUTH_URI:http://localhost:8081}
+              uri: lb://ms-auth-usuarios
               predicates:
                 - Path=/api/auth/**
 
+            # 2. Usuarios y Perfiles (ms-usuarios - Puerto 8082)
             - id: ms-usuarios-route
-              uri: ${MS_USUARIOS_URI:http://localhost:8089}
+              uri: lb://ms-usuarios
               predicates:
                 - Path=/api/usuarios/**
-                
-            - id: ms-catalogo-route
-              uri: ${MS_CATALOGO_URI:http://localhost:8082}
-              predicates:
-                - Path=/api/areas/**,/api/requisitos/**
 
-            - id: ms-asignacion-route
-              uri: ${MS_ASIGNACION_URI:http://localhost:8084}
-              predicates:
-                - Path=/api/siniestros/*/asignar,/api/siniestros/*/prorroga,/api/asignaciones/**
-
-            - id: ms-liquidacion-route
-              uri: ${MS_LIQUIDACION_URI:http://localhost:8085}
-              predicates:
-                - Path=/api/siniestros/*/aceptar,/api/siniestros/*/rechazar,/api/siniestros/*/etapa,/api/siniestros/*/cerrar,/api/liquidacion/**
-
+            # 3. Siniestros, Catálogo, Asignación, Documentos, Historial, Notificaciones y Liquidación (ms-siniestros - Puerto 8083)
             - id: ms-siniestros-route
-              uri: ${MS_SINIESTROS_URI:http://localhost:8083}
+              uri: lb://ms-siniestros
               predicates:
-                - Path=/api/siniestros/**
+                - Path=/api/siniestros/**,/api/areas/**,/api/catalogo/**,/api/requisitos/**,/api/asignaciones/**,/api/evidencias/**,/api/documentos/**,/api/historial/**,/api/notificaciones/**,/api/liquidacion/**,/api/liquidaciones/**
 
-            - id: ms-documentos-route
-              uri: ${MS_DOCUMENTOS_URI:http://localhost:8086}
-              predicates:
-                - Path=/api/evidencias/**,/api/documentos/**
-
-            - id: ms-historial-route
-              uri: ${MS_HISTORIAL_URI:http://localhost:8087}
-              predicates:
-                - Path=/api/historial/**
-
-            - id: ms-notificaciones-route
-              uri: ${MS_NOTIFICACIONES_URI:http://localhost:8088}
-              predicates:
-                - Path=/api/notificaciones/**
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://eureka-server:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
 
 jwt:
   secret: AndesBpoClaveSecretaSuperSeguraParaFirmarTokensJWT2026Chile

@@ -5,18 +5,21 @@ import com.andes.bpo.ms_auth_usuarios.exception.AuthException;
 import com.andes.bpo.ms_auth_usuarios.model.Credencial;
 import com.andes.bpo.ms_auth_usuarios.repository.CredencialRepository;
 import com.andes.bpo.ms_auth_usuarios.security.JwtUtil;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -25,11 +28,16 @@ public class AuthService {
     private final CredencialRepository credencialRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final JavaMailSender mailSender;
 
     @Value("${servicios.usuarios-uri}")
     private String usuariosUri;
 
+    @Value("${spring.mail.username}")
+    private String correoRemitente;
+
     private final RestClient restClient = RestClient.create();
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public String normalizarRut(String rut) {
         return rut == null ? "" : rut.replaceAll("[^0-9kK]", "").toUpperCase(Locale.ROOT);
@@ -99,12 +107,17 @@ public class AuthService {
         Credencial cred = credencialRepository.findByRut(rutLimpio)
                 .orElseThrow(() -> new AuthException("El RUT y el correo no coinciden", HttpStatus.BAD_REQUEST));
 
+        String nombreUsuario = "Asegurado";
+        String correoRegistrado;
         try {
             Map<String, Object> usuario = restClient.get()
                     .uri(usuariosUri + "/api/usuarios/rut/" + rutLimpio)
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {});
-            String correoRegistrado = usuario != null ? String.valueOf(usuario.get("correo")) : "";
+            correoRegistrado = usuario != null ? String.valueOf(usuario.get("correo")).trim() : "";
+            if (usuario != null && usuario.get("nombre") != null) {
+                nombreUsuario = String.valueOf(usuario.get("nombre"));
+            }
             if (!correoRegistrado.equalsIgnoreCase(request.correo().trim())) {
                 throw new AuthException("El RUT y el correo no coinciden", HttpStatus.BAD_REQUEST);
             }
@@ -114,10 +127,39 @@ public class AuthService {
             throw new AuthException("Error consultando ms-usuarios", HttpStatus.SERVICE_UNAVAILABLE);
         }
 
-        String codigo = UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        String codigo = String.format("%06d", secureRandom.nextInt(1_000_000));
         cred.setCodigoRecuperacionHash(passwordEncoder.encode(codigo));
         credencialRepository.save(cred);
-        return codigo;
+
+        enviarCorreoRecuperacion(correoRegistrado, nombreUsuario, codigo);
+        return "Código de verificación enviado a " + correoRegistrado;
+    }
+
+    private void enviarCorreoRecuperacion(String destinatario, String nombre, String codigo) {
+        try {
+            MimeMessage mensaje = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
+            helper.setFrom(correoRemitente, "Andes BPO - Soporte");
+            helper.setTo(destinatario);
+            helper.setSubject("Código de recuperación de contraseña - Andes BPO");
+
+            String html = """
+                    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                      <h2 style="color: #0f172a; margin-bottom: 8px;">Recuperación de contraseña</h2>
+                      <p style="color: #334155; font-size: 15px;">Hola <strong>%s</strong>,</p>
+                      <p style="color: #334155; font-size: 15px;">Ingresa el siguiente código de verificación en la aplicación <strong>Andes BPO</strong> para restablecer tu contraseña:</p>
+                      <div style="background-color: #f1f5f9; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1d4ed8;">%s</span>
+                      </div>
+                      <p style="color: #64748b; font-size: 13px;">Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
+                    </div>
+                    """.formatted(nombre, codigo);
+
+            helper.setText(html, true);
+            mailSender.send(mensaje);
+        } catch (Exception e) {
+            throw new AuthException("No se pudo enviar el correo de verificación: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     public void confirmarNuevaClave(ConfirmarClaveRequest request) {

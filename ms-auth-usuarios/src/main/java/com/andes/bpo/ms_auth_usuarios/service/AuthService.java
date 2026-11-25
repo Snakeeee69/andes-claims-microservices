@@ -17,9 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.security.SecureRandom;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -73,7 +77,48 @@ public class AuthService {
         Integer idUsuario = perfilUsuario.get("idUsuario") instanceof Number n ? n.intValue() : cred.getIdUsuario();
         String token = jwtUtil.generarToken(rutLimpio, rol, idUsuario);
 
+        Object correoObj = perfilUsuario.get("correo");
+        if (correoObj != null && !String.valueOf(correoObj).isBlank()) {
+            String correoDestino = String.valueOf(correoObj).trim();
+            String nombreUsuario = perfilUsuario.get("nombre") != null
+                    ? String.valueOf(perfilUsuario.get("nombre")).trim()
+                    : "Asegurado";
+            enviarCorreoInicioSesion(correoDestino, nombreUsuario);
+        }
+
         return new AuthResponse(token, perfilUsuario);
+    }
+
+    private void enviarCorreoInicioSesion(String destinatario, String nombre) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String fechaHora = ZonedDateTime.now(ZoneId.of("America/Santiago"))
+                        .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+
+                MimeMessage mensaje = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
+                helper.setFrom(correoRemitente, "Andes BPO - Seguridad");
+                helper.setTo(destinatario);
+                helper.setSubject("Nuevo inicio de sesión detectado - Andes BPO");
+
+                String html = """
+                        <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                          <h2 style="color: #0f172a; margin-bottom: 8px;">Nuevo inicio de sesión</h2>
+                          <p style="color: #334155; font-size: 15px;">Hola <strong>%s</strong>,</p>
+                          <p style="color: #334155; font-size: 15px;">Se ha registrado un inicio de sesión en tu cuenta de <strong>Andes BPO</strong>.</p>
+                          <div style="background-color: #f1f5f9; border-radius: 8px; padding: 14px; margin: 18px 0;">
+                            <p style="margin: 0; color: #0f172a; font-size: 14px;"><strong>Fecha y hora:</strong> %s</p>
+                          </div>
+                          <p style="color: #64748b; font-size: 13px;">Si fuiste tú, puedes ignorar este mensaje. Si no reconoces este acceso, te recomendamos cambiar tu contraseña desde la aplicación.</p>
+                        </div>
+                        """.formatted(nombre, fechaHora);
+
+                helper.setText(html, true);
+                mailSender.send(mensaje);
+            } catch (Exception e) {
+                System.err.println("No se pudo enviar correo de inicio de sesión: " + e.getMessage());
+            }
+        });
     }
 
     public void registrarCredencialInterna(RegistroCredencialRequest req) {

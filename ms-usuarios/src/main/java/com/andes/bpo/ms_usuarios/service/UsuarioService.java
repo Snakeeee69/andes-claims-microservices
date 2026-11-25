@@ -10,18 +10,22 @@ import com.andes.bpo.ms_usuarios.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final JavaMailSender mailSender;
 
     @Value("${servicios.auth-uri}")
     private String authUri;
@@ -76,7 +80,29 @@ public class UsuarioService {
             throw new ReglaNegocioException("No se pudo sincronizar la credencial en el servicio de autenticación");
         }
 
+        enviarCorreoBienvenida(guardado.getCorreo(), guardado.getNombre(), guardado.getRut());
+
         return guardado;
+    }
+
+    private void enviarCorreoBienvenida(String destinatario, String nombre, String rut) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                SimpleMailMessage mensaje = new SimpleMailMessage();
+                mensaje.setTo(destinatario);
+                mensaje.setSubject("Bienvenido a Andes BPO - Registro exitoso");
+                mensaje.setText(
+                        "Hola " + nombre + ",\n\n" +
+                        "Tu cuenta en Andes BPO ha sido registrada correctamente.\n" +
+                        "RUT asociado: " + rut + "\n\n" +
+                        "Ya puedes iniciar sesión en la aplicación para ingresar y hacer seguimiento a tus siniestros.\n\n" +
+                        "Atentamente,\nEquipo Andes BPO"
+                );
+                mailSender.send(mensaje);
+            } catch (Exception e) {
+                System.err.println("No se pudo enviar correo de bienvenida: " + e.getMessage());
+            }
+        });
     }
 
     public Usuario obtenerPorRut(String rut) {

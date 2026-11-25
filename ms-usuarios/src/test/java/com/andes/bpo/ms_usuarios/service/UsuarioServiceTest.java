@@ -8,12 +8,15 @@ import com.andes.bpo.ms_usuarios.model.Usuario;
 import com.andes.bpo.ms_usuarios.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
+import java.lang.reflect.Constructor;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class UsuarioServiceTest {
@@ -22,9 +25,45 @@ class UsuarioServiceTest {
     private UsuarioService servicio;
 
     @BeforeEach
-    void preparar() {
+    void preparar() throws Exception {
         repositorio = mock(UsuarioRepository.class);
-        servicio = new UsuarioService(repositorio);
+        servicio = crearServicioConRepositorio(repositorio);
+    }
+
+    private UsuarioService crearServicioConRepositorio(UsuarioRepository repo) throws Exception {
+        for (Constructor<?> ctor : UsuarioService.class.getDeclaredConstructors()) {
+            Class<?>[] params = ctor.getParameterTypes();
+            if (params.length == 1 && UsuarioRepository.class.isAssignableFrom(params[0])) {
+                ctor.setAccessible(true);
+                return (UsuarioService) ctor.newInstance(repo);
+            }
+        }
+        for (Constructor<?> ctor : UsuarioService.class.getDeclaredConstructors()) {
+            Class<?>[] params = ctor.getParameterTypes();
+            boolean tieneRepo = false;
+            Object[] args = new Object[params.length];
+            for (int i = 0; i < params.length; i++) {
+                if (UsuarioRepository.class.isAssignableFrom(params[i])) {
+                    args[i] = repo;
+                    tieneRepo = true;
+                } else if (params[i] == RestClient.Builder.class) {
+                    args[i] = mock(RestClient.Builder.class);
+                } else if (params[i] == String.class) {
+                    args[i] = "http://localhost:8080";
+                } else if (!params[i].isPrimitive()) {
+                    args[i] = mock(params[i]);
+                } else if (params[i] == boolean.class) {
+                    args[i] = false;
+                } else if (params[i] == int.class || params[i] == long.class || params[i] == double.class) {
+                    args[i] = 0;
+                }
+            }
+            if (tieneRepo) {
+                ctor.setAccessible(true);
+                return (UsuarioService) ctor.newInstance(args);
+            }
+        }
+        throw new IllegalStateException("Constructor no encontrado");
     }
 
     @Test
